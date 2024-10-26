@@ -1,4 +1,4 @@
 Dataset/
 runs/
 figure/
-weights/
+weights/*pt
