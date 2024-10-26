@@ -162,22 +162,60 @@ class ComputeLoss:
             # pred_dist = (pred_dist.view(b, a, c // 4, 4).softmax(2) * self.proj.type(pred_dist.dtype).view(1, 1, -1, 1)).sum(2)
         return dist2bbox(pred_dist, anchor_points, xywh=False)
 
+
     def __call__(self, p, targets, img=None, epoch=0):
         loss = torch.zeros(3, device=self.device)  # box, cls, dfl
         feats = p[1] if isinstance(p, tuple) else p
-        pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
-            (self.reg_max * 4, self.nc), 1)
+
+        # Debugging: Check the structure of feats
+        print(f"Type of feats: {type(feats)}")
+        if isinstance(feats, list):
+            print(f"Length of feats: {len(feats)}")
+            for i, feat in enumerate(feats):
+                print(f"Type of feats[{i}]: {type(feat)}")
+                if isinstance(feat, list):
+                    print(f"Length of feats[{i}]: {len(feat)}")
+                    for j, inner_feat in enumerate(feat):
+                        print(f"Type of feats[{i}][{j}]: {type(inner_feat)}")
+                        if isinstance(inner_feat, torch.Tensor):
+                            print(f"Shape of feats[{i}][{j}]: {inner_feat.shape}")
+
+        try:
+            # Flatten the list of lists into a single list of tensors
+            flattened_feats = [xi for sublist in feats for xi in sublist if isinstance(xi, torch.Tensor)]
+
+            # Ensure that we have tensors to concatenate
+            if not flattened_feats:
+                raise ValueError("No tensors found in feats for concatenation.")
+
+            pred_distri, pred_scores = torch.cat(
+                [xi.view(flattened_feats[0].shape[0], self.no, -1) for xi in flattened_feats], 
+                dim=2
+            ).split((self.reg_max * 4, self.nc), dim=1)
+
+        except Exception as e:
+            print(f"Error during concatenation: {e}")
+            return None  # or handle accordingly
+
         pred_scores = pred_scores.permute(0, 2, 1).contiguous()
         pred_distri = pred_distri.permute(0, 2, 1).contiguous()
 
         dtype = pred_scores.dtype
         batch_size, grid_size = pred_scores.shape[:2]
-        imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]  # image size (h,w)
-        anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
+        imgsz = torch.tensor(flattened_feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]  # image size (h,w)
+        anchor_points, stride_tensor = make_anchors(flattened_feats, self.stride, 0.5)
+
+        # Debugging: Check shapes before bbox_decode
+        print(f"Shape of pred_distri: {pred_distri.shape}")
+        print(f"Shape of anchor_points: {anchor_points.shape}")
+
+        # Ensure anchor_points has the correct shape
+        if anchor_points.dim() == 2:  # If it has shape (num_anchors, 4)
+            anchor_points = anchor_points.unsqueeze(0).expand(pred_distri.shape[0], -1, -1)  # Expand to (batch_size, num_anchors, 4)
 
         # targets
         targets = self.preprocess(targets, batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
-        gt_labels, gt_bboxes = targets.split((1, 4), 2)  # cls, xyxy
+        gt_labels, gt_bboxes = targets.split((1, 4), dim=2)  # cls, xyxy
         mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0)
 
         # pboxes
@@ -189,27 +227,29 @@ class ComputeLoss:
             anchor_points * stride_tensor,
             gt_labels,
             gt_bboxes,
-            mask_gt)
+            mask_gt
+        )
 
         target_bboxes /= stride_tensor
         target_scores_sum = max(target_scores.sum(), 1)
 
         # cls loss
-        # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
         loss[1] = self.BCEcls(pred_scores, target_scores.to(dtype)).sum() / target_scores_sum  # BCE
 
         # bbox loss
         if fg_mask.sum():
-            loss[0], loss[2], iou = self.bbox_loss(pred_distri,
-                                                   pred_bboxes,
-                                                   anchor_points,
-                                                   target_bboxes,
-                                                   target_scores,
-                                                   target_scores_sum,
-                                                   fg_mask)
+            loss[0], loss[2], iou = self.bbox_loss(
+                pred_distri,
+                pred_bboxes,
+                anchor_points,
+                target_bboxes,
+                target_scores,
+                target_scores_sum,
+                fg_mask
+            )
 
         loss[0] *= 7.5  # box gain
         loss[1] *= 0.5  # cls gain
         loss[2] *= 1.5  # dfl gain
 
-        return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
+        return loss.sum()

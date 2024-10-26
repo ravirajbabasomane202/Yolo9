@@ -1,7 +1,20 @@
 # YOLOv9
 
+
+names:
+- boneanomaly
+- bonelesion
+- foreignbody
+- fracture
+- metal
+- periostealreaction
+- pronatorsign
+- softtissue
+- text
+nc: 9
+
 # parameters
-nc: 80  # number of classes
+#nc: 80  # number of classes
 depth_multiple: 1.0  # model depth multiple
 width_multiple: 1.0  # layer channel multiple
 #activation: nn.LeakyReLU(0.1)

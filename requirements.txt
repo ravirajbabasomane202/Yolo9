@@ -45,3 +45,9 @@ seaborn>=0.11.0
 # mss
 albumentations>=1.0.3
 pycocotools>=2.0
+
+#python train.py --cfg 'C:\Users\SidMane\Documents\ML_Tutorials\ML_Programs\Projects\Doctor_AI_FractureXpert\docmain\yolov9\yolov9_config.yaml' --hyp 'C:\Users\SidMane\Documents\ML_Tutorials\ML_Programs\Projects\Doctor_AI_FractureXpert\docmain\yolov9\data\hyps\hyp.scratch-high.yaml' --img 640 --batch 16 --epochs 50 --data 'C:\Users\SidMane\Documents\ML_Tutorials\ML_Programs\Projects\Doctor_AI_FractureXpert\docmain\yolov9\dataset_config.yaml' --weights 'C:\Users\SidMane\Documents\ML_Tutorials\ML_Programs\Projects\Doctor_AI_FractureXpert\docmain\yolov9\weights\yolov9-e.pt' --name fracture_detection --device 0 
+
+
+
+#python train.py --cfg 'C:\Users\SidMane\Documents\ML_Tutorials\ML_Programs\Projects\Doctor_AI_FractureXpert\docmain\yolov9\models\detect\yolov9-e.yaml' --hyp 'C:\Users\SidMane\Documents\ML_Tutorials\ML_Programs\Projects\Doctor_AI_FractureXpert\docmain\yolov9\data\hyps\hyp.scratch-high.yaml' --img 320 --batch 8 --epochs 50 --data 'C:\Users\SidMane\Documents\ML_Tutorials\ML_Programs\Projects\Doctor_AI_FractureXpert\docmain\yolov9\dataset_config.yaml' --weights 'C:\Users\SidMane\Documents\ML_Tutorials\ML_Programs\Projects\Doctor_AI_FractureXpert\docmain\yolov9\weights\yolov9-e.pt' --name fracture_detection --device 0 

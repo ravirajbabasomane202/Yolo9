@@ -47,63 +47,100 @@ class Colors:
 colors = Colors()  # create instance for 'from utils.plots import colors'
 
 
-def check_pil_font(font=FONT, size=10):
-    # Return a PIL TrueType Font, downloading to CONFIG_DIR if necessary
-    font = Path(font)
-    font = font if font.exists() else (CONFIG_DIR / font.name)
+def check_pil_font(font='C:\\Users\\SidMane\\Documents\\ML_Tutorials\\ML_Programs\\Projects\\Doctor_AI_FractureXpert\\docmain\\yolov9\\Font\\arial.ttf', size=10):
+    from PIL import ImageFont
+    import os
+    
+    # Check if the font is already a FreeTypeFont object
+    if isinstance(font, ImageFont.FreeTypeFont):
+        return font  # If it's already a font, return it as is
+    
+    # If the font is a path, proceed to load it
+    font = os.path.normpath(font) if isinstance(font, (str, bytes, os.PathLike)) else font
     try:
-        return ImageFont.truetype(str(font) if font.exists() else font.name, size)
-    except Exception:  # download if missing
-        try:
-            check_font(font)
-            return ImageFont.truetype(str(font), size)
-        except TypeError:
-            check_requirements('Pillow>=8.4.0')  # known issue https://github.com/ultralytics/yolov5/issues/5374
-        except URLError:  # not online
-            return ImageFont.load_default()
+        return ImageFont.truetype(font, size)
+    except Exception as e:
+        LOGGER.warning(f'WARNING: Font not found, using default font. {e}')
+        return ImageFont.load_default()
 
 
 class Annotator:
     # YOLOv5 Annotator for train/val mosaics and jpgs and detect/hub inference annotations
     def __init__(self, im, line_width=None, font_size=None, font='Arial.ttf', pil=False, example='abc'):
+        if not isinstance(im, np.ndarray):
+            raise ValueError('Input image must be a numpy array.')
+        print(f"Initializing Annotator with image of shape {im.shape}")
         assert im.data.contiguous, 'Image not contiguous. Apply np.ascontiguousarray(im) to Annotator() input images.'
         non_ascii = not is_ascii(example)  # non-latin labels, i.e. asian, arabic, cyrillic
         self.pil = pil or non_ascii
+        self.font_size = font_size or 12 
         if self.pil:  # use PIL
+            print("Using PIL for annotation.")
             self.im = im if isinstance(im, Image.Image) else Image.fromarray(im)
             self.draw = ImageDraw.Draw(self.im)
-            self.font = check_pil_font(font='Arial.Unicode.ttf' if non_ascii else font,
+            self.font = check_pil_font(font='arial.ttf' if non_ascii else font,
                                        size=font_size or max(round(sum(self.im.size) / 2 * 0.035), 12))
         else:  # use cv2
+            print("Using OpenCV for annotation.")
             self.im = im
         self.lw = line_width or max(round(sum(im.shape) / 2 * 0.003), 2)  # line width
 
-    def box_label(self, box, label='', color=(128, 128, 128), txt_color=(255, 255, 255)):
-        # Add one xyxy box to image with label
+    def box_label(self, box, label='', color=(128, 128, 128), txt_color=(255, 255, 255)): 
+        """
+        Draws a bounding box on the image with an optional label. It handles both PIL and OpenCV cases.
+        """
+        print(f"Drawing box: {box}, label: {label}")
+
+        # Check if PIL is used or label contains non-ASCII characters
         if self.pil or not is_ascii(label):
-            self.draw.rectangle(box, width=self.lw, outline=color)  # box
+            # Draw a rectangle (box) using PIL
+            self.draw.rectangle(box, width=self.lw, outline=color)
+
             if label:
-                w, h = self.font.getsize(label)  # text width, height
-                outside = box[1] - h >= 0  # label fits outside box
+                # Ensure the correct PIL font is used
+                font = check_pil_font(font=self.font, size=self.font_size)
+                # Get text width and height
+                w, h = font.getbbox(label)[2:]
+
+                # Check if the label fits outside the box
+                outside = box[1] - h >= 0
+
+                # Draw a filled rectangle behind the label
                 self.draw.rectangle(
-                    (box[0], box[1] - h if outside else box[1], box[0] + w + 1,
-                     box[1] + 1 if outside else box[1] + h + 1),
-                    fill=color,
+                    (box[0], box[1] - h if outside else box[1], 
+                    box[0] + w + 1, box[1] + 1 if outside else box[1] + h + 1),
+                    fill=color
                 )
-                # self.draw.text((box[0], box[1]), label, fill=txt_color, font=self.font, anchor='ls')  # for PIL>8.0
-                self.draw.text((box[0], box[1] - h if outside else box[1]), label, fill=txt_color, font=self.font)
-        else:  # cv2
+
+                # Draw the label text
+                self.draw.text((box[0], box[1] - h if outside else box[1]), label, fill=txt_color, font=font)
+
+        else:  # OpenCV is used for drawing
             p1, p2 = (int(box[0]), int(box[1])), (int(box[2]), int(box[3]))
+
+            # Draw the rectangle (box) using OpenCV
             cv2.rectangle(self.im, p1, p2, color, thickness=self.lw, lineType=cv2.LINE_AA)
+
             if label:
-                tf = max(self.lw - 1, 1)  # font thickness
-                w, h = cv2.getTextSize(label, 0, fontScale=self.lw / 3, thickness=tf)[0]  # text width, height
+                # Calculate font thickness
+                tf = max(self.lw - 1, 1)
+
+                # Get text width and height using OpenCV
+                w, h = cv2.getTextSize(label, fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=self.lw / 3, thickness=tf)[0]
+
+                # Check if the label fits outside the box
                 outside = p1[1] - h >= 3
+
+                # Adjust the rectangle for the label background
                 p2 = p1[0] + w, p1[1] - h - 3 if outside else p1[1] + h + 3
-                cv2.rectangle(self.im, p1, p2, color, -1, cv2.LINE_AA)  # filled
+
+                # Draw a filled rectangle behind the label
+                cv2.rectangle(self.im, p1, p2, color, -1, cv2.LINE_AA)
+
+                # Draw the label text
                 cv2.putText(self.im,
                             label, (p1[0], p1[1] - 2 if outside else p1[1] + h + 2),
-                            0,
+                            cv2.FONT_HERSHEY_SIMPLEX,
                             self.lw / 3,
                             txt_color,
                             thickness=tf,

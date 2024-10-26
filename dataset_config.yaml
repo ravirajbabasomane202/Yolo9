@@ -1,0 +1,14 @@
+names:
+- boneanomaly
+- bonelesion
+- foreignbody
+- fracture
+- metal
+- periostealreaction
+- pronatorsign
+- softtissue
+- text
+nc: 9
+test: /kaggle/input/fracture-dataset/images/val
+train: /kaggle/input/fracture-dataset/images/train
+val: /kaggle/input/fracture-dataset/images/val
